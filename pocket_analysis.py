@@ -17,7 +17,7 @@ import numpy as np
 import argparse
 import threading
 import math
-
+from schrodinger.structutils.analyze import get_hydrogen_bonds
 from schrodinger.application.desmond import cmj
 from schrodinger.application.desmond import cms
 from schrodinger.application.desmond import constants
@@ -88,7 +88,7 @@ def extract_and_write(hotspot_frames_list,j,xyz_center,pocket_size,i,interaction
     os.chdir(mxmd_results_dir + "/")
     if not os.path.isfile(check_subset):     
         
-        cmd = ['$SCHRODINGER/run','trj2mae.py','-trj-frame-cutting',hotspot_frames_list[j],'-HOST sge_cpu','-extract-asl','"all and NOT(res.ptype POPC) and NOT(water)"','-align-asl','"protein"','-out-format','MAE',outcms,trj,(str(solv)+'_subset_' + str(i) +"_"+ str(hotspot_frames_list[j]))]
+        cmd = ['$SCHRODINGER/run','trj2mae.py','-trj-frame-cutting',hotspot_frames_list[j],'-HOST sge_cpu','-extract-asl','"(all and NOT(res.ptype POPC) and NOT(water)) OR res.ptype SX1 OR res.ptype UNK"','-align-asl','"protein"','-out-format','MAE',outcms,trj,(str(solv)+'_subset_' + str(i) +"_"+ str(hotspot_frames_list[j]))]
         p = sp.Popen(' '.join(cmd), stdout = sp.PIPE, shell = True)
         out,err = p.communicate()
     #rewrite so its one probe per frame with probes in the region of interest
@@ -372,13 +372,14 @@ def per_probe_analysis(solv,pocket_dir,base,jname,pname,xyz_center,size,cluster,
         if interaction:
             pandas_intrxn_analysis(probe_path)
     
-        print('probe %s completed' %solv)               
+        print('probe %s completed' %solv)
+
 
         
 
 if __name__== '__main__':
 
-    parser = argparse.ArgumentParser(description='run this script to analyze resiude-solvent interactions around a hotspot of interest. output are low energy mae snapshots of specified resiude conformations sampled during the 10 sims of a given probe',usage='move a copy of this script to the mxmd run directory. example of run command:  $SCHRODINGER/run pocket_analysis.py --pname cryptic_1 --jname mxmd --size 1.5 --center -0.82 9.15 -3.01 --cluster --interaction --simulationStage 7 --probes benzene',formatter_class=argparse.RawTextHelpFormatter)
+    parser = argparse.ArgumentParser(description='run this script to analyze resiude-solvent interactions around a hotspot of interest. output are low energy mae snapshots of specified resiude conformations sampled during the 10 sims of a given probe',usage='move a copy of this script to the mxmd run directory. example of run command:  $SCHRODINGER/run pocket_analysis.py --pname cryptic_1 --jname mxmd --size 1.5 --center -0.8w1  9.15 -3.01 --cluster --interaction --simulationStage 7 --probes benzene',formatter_class=argparse.RawTextHelpFormatter)
     #argparse usage example: python md_workflow.py GIPR --analyze 30
     #all arguments with "--" are OPTIONAL, with exception to pname and jname. options: run only prep, run only MD, run only analysis, run md + analysis, run prep + md + analysis, 
     parser.add_argument('--pname',nargs=1,type=str,required=True,help='pocket name for the analysis folder')
