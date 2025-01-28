@@ -17,7 +17,6 @@ import numpy as np
 import argparse
 import threading
 import math
-from schrodinger.structutils.analyze import get_hydrogen_bonds
 from schrodinger.application.desmond import cmj
 from schrodinger.application.desmond import cms
 from schrodinger.application.desmond import constants
