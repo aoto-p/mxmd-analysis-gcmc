@@ -286,7 +286,7 @@ def per_probe_analysis(solv,pocket_dir,base,jname,pname,xyz_center,size,cluster,
         mxmd_results_path = base + '/'+jname + '_3'
         #extract the trajectory information . this line below checks if its already been extracted by looking at one of the stages. probably not the best but its good enough :') 
         #if you get a read_traj errorm, it could be because this file was already extracted so it didnt go through with the extraction 
-        check_trj = mxmd_results_path  + '/' + jname + '_mxmd_'+probe+'-'+str(8)+'_' + str(sim_stage)+'/'+jname + '_mxmd_' + probe + '-' + str(9) + '_' + str(sim_stage)+'.xtc'
+        check_trj = mxmd_results_path  + '/' + jname + '_mxmd_'+probe+'-'+str(9)+'_' + str(sim_stage)+'/'+jname + '_mxmd_' + probe + '-' + str(9) + '_' + str(sim_stage)+'.xtc'
 
         if not os.path.isfile(check_trj):
             processes = []
