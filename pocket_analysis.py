@@ -378,8 +378,7 @@ def per_probe_analysis(solv,pocket_dir,base,jname,pname,xyz_center,size,cluster,
 
 if __name__== '__main__':
 
-    parser = argparse.ArgumentParser(description='run this script to analyze resiude-solvent interactions around a hotspot of interest. output are low energy mae snapshots of specified resiude conformations sampled during the 10 sims of a given probe',usage='move a copy of this script to the mxmd run directory. example of run command:  $SCHRODINGER/run pocket_analysis.py --pname cryptic_1 --jname mxmd --size 1.5 --center -0.8w1  9.15 -3.01 --cluster --interaction --simulationStage 7 --probes benzene',formatter_class=argparse.RawTextHelpFormatter)
-    #argparse usage example: python md_workflow.py GIPR --analyze 30
+    parser = argparse.ArgumentParser(description='run this script to analyze resiude-solvent interactions around a hotspot of interest. output are low energy mae snapshots of specified resiude conformations sampled during the 10 sims of a given probe',usage='move a copy of this script to the mxmd run directory. example of run command:  $SCHRODINGER/run pocket_analysis.py --pname cryptic_1 --jname mxmd --size 1.5 --center -0.8  9.15 -3.01 --cluster --interaction --simulationStage 7 --probes benzene',formatter_class=argparse.RawTextHelpFormatter)
     #all arguments with "--" are OPTIONAL, with exception to pname and jname. options: run only prep, run only MD, run only analysis, run md + analysis, run prep + md + analysis, 
     parser.add_argument('--pname',nargs=1,type=str,required=True,help='pocket name for the analysis folder')
     parser.add_argument('--jname',nargs=1,type=str,required=True,help='job name from the mxmd run')
