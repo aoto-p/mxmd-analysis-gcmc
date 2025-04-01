@@ -1,15 +1,7 @@
-import os
-import sys
 from schrodinger.structutils import analyze
-from schrodinger.utils import cmdline, fileutils
-from schrodinger import structure
-from schrodinger import project
 from schrodinger.application.desmond.packages import traj
-from schrodinger.application.desmond.packages import traj_util
-from schrodinger.application.desmond.packages import topo
 import os
 import sys
-import fileinput
 import shutil
 import subprocess as sp
 import pandas as pd
@@ -17,21 +9,8 @@ import numpy as np
 import argparse
 import threading
 import math
-from schrodinger.application.desmond import cmj
-from schrodinger.application.desmond import cms
-from schrodinger.application.desmond import constants
-from schrodinger.application.desmond import envir
-from schrodinger.application.desmond import struc
-from schrodinger.application.desmond import util
-from schrodinger.application.desmond.cns_io import write_cns
-from schrodinger.application.desmond.mxmd import mxmd_system_builder as msb
-from schrodinger.structutils.analyze import evaluate_asl
-from schrodinger.utils import subprocess
 from schrodinger import structure
 from schrodinger.structutils import measure
-from schrodinger.application.desmond.packages import traj, topo
-from schrodinger.application.desmond.packages import traj_util
-from schrodinger.trajectory.trajectory_gui_dir import export_structures
 from schrodinger.structure import StructureReader, StructureWriter
 '''
 MxMD Pocket analysis script 
@@ -53,16 +32,15 @@ def extract_trjs(probe,mxmd_results_dir,jname,probe_path,trj_stage_number,i):
     folder= mxmd_results_dir + '/' + jobname +'-out.tgz'
     outcms = jname + '_mxmd_'+probe+'-'+str(i)+'_' + str(trj_stage_number)+'/'+ jobname +'-out.cms'
     trj = jname + '_mxmd_'+probe+'-'+str(i)+'_' + str(trj_stage_number)+'/'+jobname +'.xtc'
-
-    cmd = ['tar','-xzf',folder,'-C',mxmd_results_dir + '/']
-    p = sp.Popen(' '.join(cmd), stdout = sp.PIPE, shell = True)
-    out,err = p.communicate()    
-
+    try:
+        cmd = ['tar','-xzf',folder,'-C',mxmd_results_dir + '/']
+        p = sp.Popen(' '.join(cmd), stdout = sp.PIPE, shell = True)
+        out,err = p.communicate()    
+    except:
+        print("trajectory file missing")
     return 
 
-def extract_frames_parallel(hotspot_frames_list,xyz_center,pocket_size,interaction,i,trj_stage_number,probe,jname,mxmd_dir,pocket_dir):  
-    # outcms = str(i) + '-out.cms'
-    # trj = str(i) + '.xtc'
+def extract_frames_parallel(hotspot_frames_list,xyz_center,pocket_size,interaction,i,trj_stage_number,probe,jname,mxmd_dir,pocket_dir,solvent_pdb):  
     jobname = jname + '_mxmd_' + probe + '-' + str(i) + '_' + str(trj_stage_number)
     outcms = mxmd_dir + '/' + jname + '_mxmd_'+probe+'-'+str(i)+'_' + str(trj_stage_number)+'/'+ jobname +'-out.cms'
     trj = mxmd_dir + '/' + jname + '_mxmd_'+probe+'-'+str(i)+'_' + str(trj_stage_number)+'/'+jobname +'.xtc'
@@ -70,40 +48,41 @@ def extract_frames_parallel(hotspot_frames_list,xyz_center,pocket_size,interacti
     #convert a subset of the trj frames to structures in a maegz file (cant do all, too much data/too slow). change hotspot_frames input to whatever way you want to slice 
     processes = []
     for j in range(len(hotspot_frames_list)):
-        thread = threading.Thread(target=extract_and_write, args=(hotspot_frames_list,j,xyz_center,pocket_size,i,interaction,outcms,trj,mxmd_dir,pocket_dir,probe))
+        thread = threading.Thread(target=extract_and_write, args=(hotspot_frames_list,j,xyz_center,pocket_size,i,interaction,outcms,trj,mxmd_dir,pocket_dir,probe,solvent_pdb))
         processes.append(thread)
         thread.start()
-    current_directory = os.getcwd()
-
     for process in processes:
-        process.join()
-   
+        process.join() 
     return
 '''
 made so this can be multithreaded. "j" is the hotspot frame index, "i" is the trj number
 '''
-def extract_and_write(hotspot_frames_list,j,xyz_center,pocket_size,i,interaction,outcms,trj,mxmd_results_dir,pocket_dir,solv):
+def extract_and_write(hotspot_frames_list,j,xyz_center,pocket_size,i,interaction,outcms,trj,mxmd_results_dir,pocket_dir,solv,solvent_pdb):
     check_subset = mxmd_results_dir + '/' + str(solv) + '_subset_' + str(i) +"_"+ str(hotspot_frames_list[j]) + '.maegz'
     os.chdir(mxmd_results_dir + "/")
-    if not os.path.isfile(check_subset):     
-        
-        cmd = ['$SCHRODINGER/run','trj2mae.py','-trj-frame-cutting',hotspot_frames_list[j],'-HOST sge_cpu','-extract-asl','"(all and NOT(res.ptype POPC) and NOT(water)) OR res.ptype SX1 OR res.ptype UNK"','-align-asl','"protein"','-out-format','MAE',outcms,trj,(str(solv)+'_subset_' + str(i) +"_"+ str(hotspot_frames_list[j]))]
+    done = True 
+    if not os.path.isfile(check_subset):
+        done = False    
+        cmd = ['$SCHRODINGER/run','trj2mae.py','-trj-frame-cutting',hotspot_frames_list[j],'-extract-asl','"(all and NOT(res.ptype POPC) and NOT(water)) OR res.ptype SX1 OR res.ptype UNK"','-align-asl','"protein"','-out-format','MAE',outcms,trj,(str(solv)+'_subset_' + str(i) +"_"+ str(hotspot_frames_list[j]))]
         p = sp.Popen(' '.join(cmd), stdout = sp.PIPE, shell = True)
         out,err = p.communicate()
+        p.wait()
+        if p.returncode == 0:
+            done = True 
+        else:
+            print("trj2mae error") 
     #rewrite so its one probe per frame with probes in the region of interest
     os.chdir(pocket_dir)
-   
-    write_frames((mxmd_results_dir + '/'+str(solv) + '_subset_' +str(i) + "_" +  str(hotspot_frames_list[j])+'.maegz'),xyz_center,pocket_size,hotspot_frames_list[j],i)
+    if done:    
+        write_frames((mxmd_results_dir + '/'+str(solv) + '_subset_' +str(i) + "_" +  str(hotspot_frames_list[j])+'.maegz'),pocket_dir,xyz_center,pocket_size,hotspot_frames_list[j],i,solvent_pdb)
 
 '''
 runs the interaction analysis tool on each extracted frame, where ligand is the solvent in the pocket 
 '''
 def run_interaction_analysis(file,pdb):
     lig_asl = '"res.ptype ' + pdb +'"'
-    #print(lig_asl)
     prot_asl = '"protein"'
     cmd = ['$SCHRODINGER/run','poseviewer_interactions_hub.py',file,'-lig_asl',lig_asl,'-rec_asl',prot_asl,'-csv']
-    #print(' '.join(cmd))
     p = sp.Popen(' '.join(cmd), stdout = sp.PIPE, shell = True)
     out,err = p.communicate()
 
@@ -111,38 +90,38 @@ def run_interaction_analysis(file,pdb):
 given a coordinate and size, this function finds all atoms in the size range and finds which solvent molecule, if any, it belongs to. it keeps track of whole solvent molecules
 in the return dictionary. it excludees waters and amino acids. output is dict with resnum as key, and value is pdb code and atom nums. example: {16: ['P1R', [5098, 5099, 5100, 5101, 5102, 5103, 5104, 5105, 5106, 5107]]} 
 '''    
-def get_probe_in_hotspot(st,xyz_center,pocket_size):
+def get_probe_in_hotspot(st,xyz_center,pocket_size,solvent_pdb):
     #given xyz, get all probes within A angstroms 
     #get location of each of those probes 
     atoms_in_hotspot=measure.get_atoms_close_to_point(st,xyz_center,pocket_size) #get all atoms close to centroid of hotspot 
     hotspot_solvents = {}
+    found = False
     if len(atoms_in_hotspot) > 0:
+        found=True 
         for atom in atoms_in_hotspot:
             res_num = st.atom[atom].resnum #get the residue of an atom 
             pdb_code = st.atom[atom].pdbres
             pdb = pdb_code.strip()
-            if pdb not in ['UNK','SX1','ALA', 'ARG', 'ASN', 'ASP', 'CYS', 'GLN', 'GLU', 'GLY', 'HIS', 'ILE', 'LEU', 'LYS','MET', 'PHE', 'PRO', 'SER', 'THR', 'TRP', 'TYR', 'VAL']:
+            if pdb == solvent_pdb:
                 if res_num not in hotspot_solvents.keys():
                     hotspot_solvents[res_num] = [pdb]
         for residue_number,residue_name in hotspot_solvents.items():
             residue_atoms = [atom.index for atom in st.atom if atom.pdbres.strip() == residue_name[0] and atom.resnum == residue_number]
             hotspot_solvents[residue_number].append(residue_atoms)
-    return hotspot_solvents
+    return hotspot_solvents, found
 
 '''
 for each solvent in the hotspot designated, generate a file that has the structure from that frame in the trj and the single extracted solvent in the pocket 
 '''
-def write_frames(input_file,xyz_center,pocket_size,frame,run_num):
+def write_frames(input_file,pocket_dir,xyz_center,pocket_size,frame,run_num,solvent_pdb):
     with StructureReader(input_file) as reader:
-            #for each file in the sliced subset  - should only be 1 in this case 
             for structure in reader: 
-                hotspot_solvents = get_probe_in_hotspot(structure,xyz_center,pocket_size) 
-                #print(hotspot_solvents)
+                hotspot_solvents,found = get_probe_in_hotspot(structure,xyz_center,pocket_size,solvent_pdb) 
                 #if there is any solvents even in that hotspot at this moment in time
                 if len(hotspot_solvents) > 0:
                     #need to create a new file for each solvent found in the hotspot
                     for residue in hotspot_solvents.keys():
-                        output_file = 'sliced_subset_' + str(run_num) + "_" + str(frame) + "_" + str(residue)+'.maegz'
+                        output_file = pocket_dir + '/sliced_subset_' + str(run_num) + "_" + str(frame) + "_" + str(residue)+'.maegz'
                         with StructureWriter(output_file) as writer: 
                             new_st = structure.copy() 
                             protein_atoms = analyze.evaluate_asl(structure, 'protein') 
@@ -177,7 +156,6 @@ def pandas_intrxn_analysis(probe_path):
     # Check if the filename starts with the given prefix
         if filename.startswith(prefix) and filename.endswith(suffix):
             files.append(filename)
-    #print(directory,files)
     df = pd.read_csv(files[0])
     probe_count = len(files)
     df['trj_Frame'] = files[0][14:21]
@@ -195,15 +173,19 @@ def concat_subsets(probe):
         directory = '.'
         prefix = 'sliced_subset_'
         suffix = '.maegz'
-        cmd = ['$SCHRODINGER/run','structcat.py']
-        # Loop through all files in the directory
+        cmd = ['$SCHRODINGER/run','structcat.py','-o',(probe+'_poses.maegz')]
+        subsets_found=False
         for filename in os.listdir(directory):
             # Check if the filename starts with the given prefix
             if filename.startswith(prefix) and filename.endswith(suffix):
                 cmd.append(filename)
-        cmd+=['-o',(probe +'_poses.maegz')]
-        p = sp.Popen(' '.join(cmd), stdout = sp.PIPE, shell = True)
-        out,err = p.communicate()
+                subsets_found=True
+        if not subsets_found:
+           print("No sliced files in directory, hotspot empty or pipeline error occured")
+        else:
+           p = sp.Popen(' '.join(cmd), stdout = sp.PIPE, shell = True)
+           out,err = p.communicate()
+        return subsets_found
 
 '''
 run schrodinger conformation clustering in probe folder. issue: this cant run with variable amounts of atoms, so i had to remove solvent. which means for final 
@@ -215,7 +197,6 @@ def conformer_cluster(probe):
     cmd = ['$SCHRODINGER/run','conformer_cluster.py','-a',asl,'-HOST','sge_cpu','-n','0','-l','"Ward"','-rep','-o','clustered','-OVERWRITE',(probe +'_poses.maegz'),'-WAIT']
     p = sp.Popen(' '.join(cmd), stdout = sp.PIPE, stderr=sp.PIPE, shell = True)
     out,err = p.communicate()
-    #print(out,err)
 
 '''
 clustering analysis & finding centroids script from phillip aoto. run after schrodinger clustering script in the probe dir. 
@@ -231,7 +212,6 @@ def extractN_clustering():
     datalsn = pd.read_csv('clustered_ligand1.grp', sep=',')
     print('analyzing clusters...')
     clustermax = np.max(datalsn['ClusterItemCount']) #find the max population amount
-    # print(clustermax)
     cluster_order = datalsn.sort_values(by=['ClusterItemCount'],ascending=False) #sort by highest pop
     unique_labels = cluster_order['ClusterNumber'].drop_duplicates().to_list()[:3] #get the cluster labels for the 3 highest pop
    
@@ -296,6 +276,8 @@ def per_probe_analysis(solv,pocket_dir,base,jname,pname,xyz_center,size,cluster,
                 thread.start()
             for process in processes:
                 process.join()
+        else:
+            print("trajectory files found")
         processes=[]
         #wont re-run  slicing if its already done
         files = os.listdir(os.getcwd())
@@ -306,10 +288,16 @@ def per_probe_analysis(solv,pocket_dir,base,jname,pname,xyz_center,size,cluster,
                 out_files.append(file)
                 sliced_done = True
         if not sliced_done:
+            print("slicing trajectories")
+            j=0
             for i in range(run_num):
                 #generate hotspot_frames_list
+                check_trj = mxmd_results_path  + '/' + jname + '_mxmd_'+probe+'-'+str(i)+'_' + str(sim_stage)+'/'+jname + '_mxmd_' + probe + '-' + str(i) + '_' + str(sim_stage)+'.xtc'
+                if not os.path.isfile(check_trj):
+                    print("trajectory file" +  str(i) + " is missing, skipping")
+                    continue
                 #NOTE: change hotspot_frames_list to whatever increment you want to slice up your trj with to analyze (cant analyze all of trj without crashing). this list is currently the list of frames schrodinger uses to generate mxmd maps.
-                if i == 0:
+                if j == 0:
                     if not os.path.isfile('hotspot_frames.txt'):
                         outcms = jname + '_mxmd_'+probe+'-'+str(i)+'_' + str(sim_stage)+'/'+jname + '_mxmd_' + probe + '-' + str(i) + '_' + str(sim_stage)+'-out.cms'
                         trj = mxmd_results_path  + '/'+jname + '_mxmd_'+probe+'-'+str(i)+'_' + str(sim_stage)+'/'+jname + '_mxmd_' + probe + '-' + str(i) + '_' + str(sim_stage)+'.xtc'
@@ -326,9 +314,11 @@ def per_probe_analysis(solv,pocket_dir,base,jname,pname,xyz_center,size,cluster,
                             hotspot_frames_list = [str(num) for num in l.split(',')]
 
                 #now get the frames that have the solvent in hotspot
-                thread = threading.Thread(target=extract_frames_parallel, args=(hotspot_frames_list,xyz_center,size,interaction,i,sim_stage,solv,jname,mxmd_results_path,probe_path))
+                print("slicing %s" %(str(i)))
+                thread = threading.Thread(target=extract_frames_parallel, args=(hotspot_frames_list,xyz_center,size,interaction,i,sim_stage,solv,jname,mxmd_results_path,probe_path,pdb))
                 processes.append(thread)
-                thread.start()   
+                thread.start()
+                j+=1
             for process in processes:
                 process.join()
         os.chdir(probe_path)
@@ -338,38 +328,35 @@ def per_probe_analysis(solv,pocket_dir,base,jname,pname,xyz_center,size,cluster,
             for file in files:
                 if file.startswith('sliced') and file.endswith('.maegz'):
                     out_files.append(file)
-                    sliced_done = True
             source = os.path.join(pocket_dir,'poseviewer_interactions_hub.py')
             destination =os.path.join(probe_path,'poseviewer_interactions_hub.py')  # File path in Directory B
             shutil.copy(source, destination)
             for file in out_files:
                 run_interaction_analysis(file,pdb)
+            pandas_intrxn_analysis(probe_path)
         if cluster:
             #checks to continue workflow if something failed 
             if not os.path.isfile(str(solv)+'_poses.maegz'):
 
                 print("combining files...")
-                concat_subsets(solv)
-        
-            
-            if not os.path.isfile('clustered_ligand1.grp'):
-                conformer_cluster(solv)
+                subsets_found = concat_subsets(solv)
+                if subsets_found:
+                    if not os.path.isfile('clustered_ligand1.out'):
+                        conformer_cluster(solv)
 
-            try:
-                centroids,cluster_pops = extractN_clustering()
+                    try:
+                        centroids,cluster_pops = extractN_clustering()
 
-            except:
-                print("waiting for cluster run to be done")
-                while True:
-                    if os.path.isfile('clustered_ligand1.grp'):
-                        print("clustering done")
-                        break
+                    except:
+                        print("waiting for cluster run to be done")
+                        while True:
+                            if os.path.isfile('clustered_ligand1.out'):
+                                print("clustering done")
+                                break
                 centroids,cluster_pops = extractN_clustering()
         
-            for cent in centroids:
-                extract_centroid(int(cent),solv,pname,pocket_dir)
-        if interaction:
-            pandas_intrxn_analysis(probe_path)
+                for cent in centroids:
+                    extract_centroid(int(cent),solv,pname,pocket_dir)
     
         print('probe %s completed' %solv)
 
@@ -378,7 +365,7 @@ def per_probe_analysis(solv,pocket_dir,base,jname,pname,xyz_center,size,cluster,
 
 if __name__== '__main__':
 
-    parser = argparse.ArgumentParser(description='run this script to analyze resiude-solvent interactions around a hotspot of interest. output are low energy mae snapshots of specified resiude conformations sampled during the 10 sims of a given probe',usage='move a copy of this script to the mxmd run directory. example of run command:  $SCHRODINGER/run pocket_analysis.py --pname cryptic_1 --jname mxmd --size 1.5 --center -0.8  9.15 -3.01 --cluster --interaction --simulationStage 7 --probes benzene',formatter_class=argparse.RawTextHelpFormatter)
+    parser = argparse.ArgumentParser(description='run this script to analyze resiude-solvent interactions around a hotspot of interest. output are low energy mae snapshots of specified resiude conformations sampled during the 10 sims of a given probe',usage='move a copy of this script to the mxmd run directory. example of run command:  $SCHRODINGER/run pocket_analysis.py --pname cryptic_1 --jname mxmd --size 1.5 --center -0.8w1  9.15 -3.01 --cluster --interaction --simulationStage 7 --probes benzene',formatter_class=argparse.RawTextHelpFormatter)
     #all arguments with "--" are OPTIONAL, with exception to pname and jname. options: run only prep, run only MD, run only analysis, run md + analysis, run prep + md + analysis, 
     parser.add_argument('--pname',nargs=1,type=str,required=True,help='pocket name for the analysis folder')
     parser.add_argument('--jname',nargs=1,type=str,required=True,help='job name from the mxmd run')
