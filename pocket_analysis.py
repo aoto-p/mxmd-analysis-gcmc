@@ -289,15 +289,10 @@ def per_probe_analysis(solv,pocket_dir,base,jname,pname,xyz_center,size,cluster,
                 sliced_done = True
         if not sliced_done:
             print("slicing trajectories")
-            j=0
             for i in range(run_num):
                 #generate hotspot_frames_list
-                check_trj = mxmd_results_path  + '/' + jname + '_mxmd_'+probe+'-'+str(i)+'_' + str(sim_stage)+'/'+jname + '_mxmd_' + probe + '-' + str(i) + '_' + str(sim_stage)+'.xtc'
-                if not os.path.isfile(check_trj):
-                    print("trajectory file" +  str(i) + " is missing, skipping")
-                    continue
                 #NOTE: change hotspot_frames_list to whatever increment you want to slice up your trj with to analyze (cant analyze all of trj without crashing). this list is currently the list of frames schrodinger uses to generate mxmd maps.
-                if j == 0:
+                if i == 0:
                     if not os.path.isfile('hotspot_frames.txt'):
                         outcms = jname + '_mxmd_'+probe+'-'+str(i)+'_' + str(sim_stage)+'/'+jname + '_mxmd_' + probe + '-' + str(i) + '_' + str(sim_stage)+'-out.cms'
                         trj = mxmd_results_path  + '/'+jname + '_mxmd_'+probe+'-'+str(i)+'_' + str(sim_stage)+'/'+jname + '_mxmd_' + probe + '-' + str(i) + '_' + str(sim_stage)+'.xtc'
@@ -317,8 +312,7 @@ def per_probe_analysis(solv,pocket_dir,base,jname,pname,xyz_center,size,cluster,
                 print("slicing %s" %(str(i)))
                 thread = threading.Thread(target=extract_frames_parallel, args=(hotspot_frames_list,xyz_center,size,interaction,i,sim_stage,solv,jname,mxmd_results_path,probe_path,pdb))
                 processes.append(thread)
-                thread.start()
-                j+=1
+                thread.start()   
             for process in processes:
                 process.join()
         os.chdir(probe_path)
