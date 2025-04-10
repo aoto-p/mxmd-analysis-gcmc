@@ -355,7 +355,7 @@ def per_probe_analysis(solv,pocket_dir,base,jname,pname,xyz_center,size,cluster,
                 while True:
                     if os.path.isfile('clustered_ligand1.out'):
                         print("clustering done")
-                            break
+                        break
                 centroids,cluster_pops = extractN_clustering()
                 for cent in centroids:
                     extract_centroid(int(cent),solv,pname,pocket_dir)
