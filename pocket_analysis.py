@@ -336,25 +336,27 @@ def per_probe_analysis(solv,pocket_dir,base,jname,pname,xyz_center,size,cluster,
             pandas_intrxn_analysis(probe_path)
         if cluster:
             #checks to continue workflow if something failed 
+            subsets_found=False
             if not os.path.isfile(str(solv)+'_poses.maegz'):
 
                 print("combining files...")
                 subsets_found = concat_subsets(solv)
-                if subsets_found:
-                    if not os.path.isfile('clustered_ligand1.out'):
-                        conformer_cluster(solv)
+                if not subsets_found:
+                    return
+            
+            if not os.path.isfile('clustered_ligand1.out'):
+                conformer_cluster(solv)
 
-                    try:
-                        centroids,cluster_pops = extractN_clustering()
-
-                    except:
-                        print("waiting for cluster run to be done")
-                        while True:
-                            if os.path.isfile('clustered_ligand1.out'):
-                                print("clustering done")
-                                break
+            try:
                 centroids,cluster_pops = extractN_clustering()
-        
+
+            except:
+                print("waiting for cluster run to be done")
+                while True:
+                    if os.path.isfile('clustered_ligand1.out'):
+                        print("clustering done")
+                            break
+                centroids,cluster_pops = extractN_clustering()
                 for cent in centroids:
                     extract_centroid(int(cent),solv,pname,pocket_dir)
     
