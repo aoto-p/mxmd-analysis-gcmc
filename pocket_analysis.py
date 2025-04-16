@@ -16,8 +16,8 @@ from schrodinger.structure import StructureReader, StructureWriter
 MxMD Pocket analysis script 
 author: lily steiner (contact for questions at lily.steiner@lilly.com)
 features:
-- finds centroid of the most frequently occuring population of the receptor conformation with solvent present in pocket of interest
-- finds interactions with receptor made by solvent in pocket of interest
+- finds centroid of the most frequently occuring population of the protein conformation with solvent present in pocket of interest
+- finds interactions with protein made by solvent in pocket of interest
 output: directory with up to 3 centroids representing the top populations of pocket & a csv file "interaction
 
 workflow:
@@ -375,7 +375,7 @@ if __name__== '__main__':
     #parser.add_argument('--parallel',action="store_true",required=False,help='ignore - used automatically')
     parser.add_argument('--size',nargs=1,type=str,required=True,help='size in angstroms of the pocket of interest')
     parser.add_argument('--center',nargs='+',type=str,required=True,help='xyz coordinates of the center of the pocket of interest. to get this value, open up the mxmd prj file and select the hotspots in the entry list that are in the region of interest. select a representative atom / probe close to the center, and to see its XYZ go to style->apply labels-> edit custom label-> xyz coordinate. example: --center -0.23 7.48 -6.65')
-    parser.add_argument('--cluster',action="store_true",required=False,help='perform clustering on receptor conformation with hotspot probes in a specific pocket')
+    parser.add_argument('--cluster',action="store_true",required=False,help='perform clustering on protein conformation with hotspot probes in a specific pocket')
     parser.add_argument('--interaction',action="store_true",required=False,help='run a pose view interaction analysis on all probes in a hotspot in context of frame')
     parser.add_argument('--simulationStage',nargs=1,type=str,required=True,help='the stage that you can find the trjs for all the runs, usually 5,6,or 7.')
     parser.add_argument('--solventsPDB',nargs='+',type=str,required=True,help='the pdb code of each of the solvent probes youre running this one (i.e. --solventsPDB EOH CCN)')
