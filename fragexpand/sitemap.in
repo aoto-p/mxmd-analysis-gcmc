@@ -1,0 +1,5 @@
+PROTEIN split_receptor1-prep.mae
+LIGMAE ../ligandref.maegz
+SITEBOX 6
+COMPACT_MODE_THRESHOLD 800
+KEEPLOGS yes
