@@ -1,0 +1,240 @@
+task {
+  task = "desmond:auto"
+  set_family = {
+     desmond = {
+        checkpt.write_last_step = false
+        backend.migration.interval = 0.024
+     }
+  }
+}
+assign_forcefield {
+  forcefield = S-OPLS
+  hydrogen_mass_repartition = true
+  water = SPC
+  #restraints.new = [
+  #{ name = "posre_harm"
+ #atoms  = "asl: ((atom.ptype  N ) AND ((res.num  353 ) AND (chain.name  A ) ))"
+ #     force_constants  =  0.11 
+ #     sigma = 0.5 }
+ #]
+}
+
+
+extern {
+        command = "
+import schrodinger.application.desmond.cms as Cms
+
+def DuplicateVDWType(ffioTable, sourceTypeName, newTypeName):
+    for vdwtype in ffioTable.vdwtype:
+        if vdwtype.name == sourceTypeName:
+            newVDWType = ffioTable.addVdwtype()
+            newVDWType.name = newTypeName
+            newVDWType.c1 = vdwtype.c1
+            newVDWType.c2 = vdwtype.c2
+            newVDWType.funct = vdwtype.funct
+
+
+def ModifyVDWType(ffioTable, oldTypeName, newTypeName):
+    for site in ffioTable.site:
+        if site.vdwtype == oldTypeName:
+            site.vdwtype = newTypeName
+
+
+def AddVDWCombination(
+        ffioTable,
+        typeName1, typeName2,
+        functionalForm,
+        param1, param2):
+    newCombination = ffioTable.addVdwtypescombined()
+    newCombination.name1 = typeName1
+    newCombination.name2 = typeName2
+    newCombination.c1 = param1
+    newCombination.c2 = param2
+    newCombination.funct = functionalForm
+
+
+def main(self, job):
+   # Get the .cms file from the previous stage and modify it.
+  cms_file = job.output.struct_file()
+  inputCMS = Cms.Cms(cms_file)
+  benzeneFFIO = inputCMS.comp_ct[-2].ffio
+  DuplicateVDWType( benzeneFFIO, 'C4', 'C4_S' )
+  ModifyVDWType( benzeneFFIO, 'C4', 'C4_S' )
+  AddVDWCombination( benzeneFFIO, 'C4_S', 'C4_S', 'LJ12_6_sig_epsilon', 5.0, 0.01 )
+  if '_benzene-' in str(cms_file):
+    inputCMS.write(cms_file)
+
+"
+}
+
+simulate {
+  title = "Brownian Dynamics NVT, T = 10K, small timesteps, and restraints on all solute atoms, 24ps"
+  time = 24.0
+  ensemble = {
+     brownie.delta_max = 0.1
+     class = NVT
+     method = Brownie
+  }
+  restraints.new = [{
+     name = posre_harm
+     atoms = solute
+     force_constants = 50.0
+  }]
+  temperature = 10.0
+  timestep = [0.001 0.001 0.003 ]
+}
+
+concatenate {
+  simulate = [
+     {title = "Brownian Dynamics NVT, T = 10K, small timesteps, and restraints on solute heavy atoms, 24ps"
+      time = 24.0
+      temperature = 10.0
+      ensemble = {
+         brownie.delta_max = 0.1
+         class = NVT
+         method = Brownie
+      }
+      restraints.new = [{
+         name = posre_harm
+         atoms = solute_heavy_atom
+         force_constants = 20.0
+      }]
+      timestep = [0.001 0.001 0.003 ]
+     }
+
+     {title = "NVT, T = 10K, small timesteps, and restraints on solute heavy atoms, 12ps"
+      time = 30.0
+      temperature = 10.0
+      eneseq.interval = 0.3
+      ensemble = {
+         class = NVT
+         method = Langevin
+         thermostat.tau = 0.1
+      }
+      randomize_velocity.interval = 1.0
+      restraints.new = [{
+         name = posre_harm
+         atoms = solute_heavy_atom
+         force_constants = 10.0
+      }]
+      timestep = [0.001 0.001 0.003 ]
+      trajectory.interval = 24.0
+     }
+
+     {title = "NPT, T = 10K, and restraints on solute heavy atoms, 12ps"
+      time = 40.0
+      temperature = 10.0
+      eneseq.interval = 0.3
+      ensemble = {
+         barostat.tau = 50.0
+         class = NPT
+         method = Langevin
+         thermostat.tau = 0.1
+      }
+      randomize_velocity.interval = 1.0
+      restraints = { existing = retain }
+     }
+
+     {title = "NPT and restraints on solute heavy atoms, 24ps"
+      time = 100.0
+      temperature = 300.0
+      eneseq.interval = 0.3
+      ensemble = {
+         barostat.tau = 50.0
+         class = NPT
+         method = Langevin
+         thermostat.tau = 0.1
+      }
+      randomize_velocity.interval = 1.0
+      restraints = { existing = retain }
+      trajectory.interval = 24.0
+     }
+]
+}
+simulate
+     {title = "NPT and no restraints, 15ns"
+      time = 4000.0
+      timestep = [0.004 0.004 0.008]
+      eneseq.interval = 0.3
+      ensemble = {
+         barostat.tau = 2.0
+         class = NPT
+         method = Langevin
+         thermostat.tau = 0.1
+      }
+      gcmc = {
+         gcmc_region = {
+            exclusion_radius = 1.5
+            global_switching = {
+               frequency = 0.75
+            }
+         }
+         interval = 1.0
+         moves = {
+            moves_per_cycle = 4000
+         }
+         mu_excess = -6.137
+         seed = 2014
+         solvent = {
+            num_copies = 12000
+         }
+         solvent_density = 0.03248
+      }
+
+      trajectory = {
+         center = solute
+         interval = 240.0
+      }
+     }
+
+simulate {title = "NPgT production"
+#SIMULATION TIME PER REPLICA
+   time = 20000.0
+   timestep = [0.004 0.004 0.008]
+   checkpt.interval = 240.0
+   ensemble = {
+      barostat.tau = 2.0
+      class = NPT
+      method = MTK
+      thermostat.tau = 1.0
+   }
+      gcmc = {
+         gcmc_region = {
+            exclusion_radius = 1.5
+            global_switching = {
+               frequency = 0.75
+            }
+         }
+         interval = 10.0
+         moves = {
+            moves_per_cycle = 8000
+         }
+         mu_excess = -6.137
+         seed = 2014
+         solvent = {
+            num_copies = 24000
+         }
+         solvent_density = 0.03248
+      }
+
+   maeff_output.trjdir = "$JOBNAME.xtc"
+   trajectory = {
+      interval = 4.8
+      center = solute
+      format = xtc
+      name = "$JOBNAME.xtc"
+   }
+}
+
+mixed_solvent_analysis {
+   title = "Align the system on backbone of protein or nucleic acids, and do volumentric analysis of the probes."
+   grid_spacing = 0.5
+#   align_asl = '((protein and atom.ptype CA) or (nucleic_acids and /P0(-OM)(*O0)(*O0)(*O0)/))'
+   align_asl = '((protein and chain.name A and atom.ptype CA))'
+
+}
+
+trim {
+  effect_if = [ [is_debugging ] {save = all } ]
+  save = [-1 -2]
+}

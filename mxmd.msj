@@ -1,0 +1,28 @@
+task {
+}
+
+mixed_solvent_setup {
+#
+#acetonitrile,isopropanol,pyrimidine,methylamine,methylsulfonylmethane,acetone,oxazole,sulfamide,urea,nmethylacetamide,ethanol,glycerol,pyrazine,isopropylamine,aceticacid,formamide,dimethylsulfoxide,diethylamine,acetamide,thiazole -time 5000.0 -time-equilibrate 15000.0 -nsim-per-probe 10 -maxjob 0 -SUBHOST localhost -JOBNAME mixed_solvent_example -HOST localhost
+	cosolvent_probes = [ methylammonium acetate cpiperidine acetohydroxamicacid]
+  custom_probe_dir = "."
+  cosolvent_layer_size = 7.0
+  #Number of replicas per solvent maximum is 10 and it is recomended
+  number_cosolvent_systems = 10
+  #membrane = POPC
+  water = 'SPC'
+  init_water_buffer = 19.0
+  transfer_asap = false
+}
+
+multisim {
+  jlaunch_opt = [-mode umbrella]
+  job = [
+    [-HOST "$SUBHOST" -cpu 64 -m "mxmd_npt.msj" -JOBNAME "$MAINJOBNAME_$JOBTAG" -o "$MAINJOBNAME_$JOBTAG-out.mae"]
+  ]
+  transfer_asap = true
+}
+
+
+mixed_solvent_cleanup {
+}
